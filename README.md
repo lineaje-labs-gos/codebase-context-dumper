@@ -6,6 +6,10 @@
 
 A Model Context Protocol (MCP) server designed to easily dump your codebase context into Large Language Models (LLMs).
 
+<a href="https://glama.ai/mcp/servers/@lex-tools/codebase-context-dumper">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@lex-tools/codebase-context-dumper/badge" alt="@lex-tools/codebase-context-dumper MCP server" />
+</a>
+
 ## Why Use This?
 
 Large context windows in LLMs are powerful, but manually selecting and formatting files from a large codebase is tedious. This tool automates the process by:
