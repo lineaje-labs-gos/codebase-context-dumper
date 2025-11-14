@@ -1,0 +1,131 @@
+name: Publish Workflow
+permissions:
+  contents: read
+
+on:
+  push:
+    tag:
+      - v* 
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description:  Provide the tag to publish the package
+        required: false
+      fixed_cves:
+        description:  Provide the list of CVEs fixed by this version
+        required: false
+
+jobs:
+  build_test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_version != '' }}
+
+    steps:
+    
+      - name: Check out code
+        uses: actions/checkout@v4.1.7
+        with:
+          ref: ${{ github.event.inputs.release_version }}
+          submodules: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '20'
+
+      - name: Install JFrog CLI
+        run: curl -fL https://install-cli.jfrog.io | sh
+
+      - name: Clear npm cache
+        run: npm cache clean --force
+
+      - name: Configure .npmrc for JFrog
+        run: |
+            echo "registry=https://${{ secrets.JFROG_HOST_NAME }}/artifactory/api/npm/${{ secrets.NPM_GOS_ALL_ARTIFACTORY }}/" > ~/.npmrc
+            echo "//${{ secrets.JFROG_HOST_NAME }}/artifactory/api/npm/${{ secrets.NPM_GOS_ALL_ARTIFACTORY }}/:_authToken=${{ secrets.CUSTOMER_ZERO_TOKEN }}" >> ~/.npmrc
+            echo "always-auth=true" >> ~/.npmrc
+
+
+      - name: Install dependencies for Node
+        run: npm install 2>&1 | tee npm-install.log
+
+      - name: Upload npm install log to Artifactory
+        run: |
+          PROJECT_NAME=${GITHUB_REPOSITORY##*/}
+          jf rt u "npm-install.log" "${{ secrets.NPM_STAGING_ARTIFACTORY }}/logs/build_test/${PROJECT_NAME}-${{ github.event.inputs.release_version  }}/" --url https://${{ secrets.JFROG_HOST_NAME }}/artifactory/ --access-token=${{ secrets.JFROG_PASSWORD }}
+         
+      - name: Run tests if available
+        run: |
+          if [ "$(node -p "require('./package.json').scripts?.test")" != "undefined" ]; then
+            echo "Running tests..."
+            npm test 2>&1 | tee npm-test.log
+            PROJECT_NAME=${GITHUB_REPOSITORY##*/}
+            jf rt u "npm-test.log" "${{ secrets.NPM_STAGING_ARTIFACTORY }}/logs/build_test/${PROJECT_NAME}-${{ github.event.inputs.release_version  }}/" --url https://${{ secrets.JFROG_HOST_NAME }}/artifactory/ --access-token=${{ secrets.JFROG_PASSWORD }}
+          else
+            echo "No test script found, skipping."
+          fi
+
+  publish:
+    needs: build_test
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_version != '' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.7
+        with:
+          ref: ${{ github.event.inputs.release_version }}
+          submodules: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      
+      - name: Install JFrog CLI
+        run: curl -fL https://install-cli.jfrog.io | sh
+
+      - name: Install dependencies for Node
+        run: npm install
+
+      - name: Read version and package
+        run: |
+           PACKAGE_FILENAME=$(npm pack --pack-destination ./ | grep -E '^[a-z]' | head -n 1)
+           echo "PACKAGE_FILENAME=$PACKAGE_FILENAME" >> $GITHUB_ENV
+
+      - name: Import GPG private key
+        run: |
+            echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import --pinentry-mode loopback
+
+      - name: Sign the .tgz package file
+        run: |
+          gpg --yes --pinentry-mode loopback \
+          --armor --detach-sign --local-user "${{ secrets.GPG_KEY_ID }}" "$PACKAGE_FILENAME"
+
+      - name: Configure .npmrc for JFrog
+        run: |
+            echo "registry=https://${{ secrets.JFROG_HOST_NAME }}/artifactory/api/npm/${{ secrets.NPM_STAGING_ARTIFACTORY }}/" > ~/.npmrc
+            echo "//${{ secrets.JFROG_HOST_NAME }}/artifactory/api/npm/${{ secrets.NPM_STAGING_ARTIFACTORY }}/:_authToken=${{ secrets.JFROG_PASSWORD }}" >> ~/.npmrc
+            echo "always-auth=true" >> ~/.npmrc
+
+      - name: Publish package to JFrog
+        run: npm publish "$PACKAGE_FILENAME" 2>&1 | tee npm-publish.log
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.JFROG_PASSWORD }}
+
+      - name: Upload publish log to Artifactory
+        run: |
+         PROJECT_NAME=${GITHUB_REPOSITORY##*/}
+         jf rt u "npm-publish.log" "${{ secrets.NPM_STAGING_ARTIFACTORY }}/logs/publish/${PROJECT_NAME}-${{  github.event.inputs.release_version }}/" --url https://${{ secrets.JFROG_HOST_NAME }}/artifactory/ --access-token=${{ secrets.JFROG_PASSWORD }}
+
+      - name: Upload signature file to Artifactory
+        run: |
+         PROJECT_NAME=${GITHUB_REPOSITORY##*/}
+         jf rt u "${PACKAGE_FILENAME}.asc" "${{ secrets.NPM_STAGING_ARTIFACTORY }}/${PROJECT_NAME}/-/" --url https://${{ secrets.JFROG_HOST_NAME }}/artifactory/ --access-token=${{ secrets.JFROG_PASSWORD }}
+
+      - name: Set CVE property in Artifactory
+        # Property is set on the signature file to prevent multiple calls
+        run: |
+          PROJECT_NAME=${GITHUB_REPOSITORY##*/}
+          jf rt sp "${{ secrets.NPM_STAGING_ARTIFACTORY }}/${PROJECT_NAME}/-/${PACKAGE_FILENAME}.asc" "fixed_cves=${{ github.event.inputs.fixed_cves }}" --url https://${{ secrets.JFROG_HOST_NAME }}/artifactory/ --access-token ${{ secrets.JFROG_PASSWORD }}
+
