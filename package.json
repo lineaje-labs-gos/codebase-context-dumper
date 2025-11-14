@@ -1,11 +1,17 @@
 {
   "name": "@lex-tools/codebase-context-dumper",
-  "version": "0.1.5",
+  "version": "0.1.5-lineaje-01",
   "description": "A Model Context Protocol server to dump your codebase into your LLM model",
   "license": "Apache-2.0",
+  "contributors": [
+    {
+      "name": "Lineaje DepFixer",
+      "email": "221268890+Lineaje-DepFixer@users.noreply.github.com"
+    }
+  ],
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/lex-tools/codebase-context-dumper.git"
+    "url": "https://github.com/lineaje-labs-gos/codebase-context-dumper"
   },
   "type": "module",
   "bin": {
