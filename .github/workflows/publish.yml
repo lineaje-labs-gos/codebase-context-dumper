@@ -113,15 +113,36 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.JFROG_PASSWORD }}
 
+      - name: Extract published package path
+        id: published_pkg
+        run: |
+            LAST_LINE=$(tail -1 npm-publish.log)
+            if [[ "$LAST_LINE" != +* ]]; then
+              echo "ERROR: Unexpected npm publish output: $LAST_LINE"
+              exit 1
+            fi
+            # Extract full "name@version" by stripping leading "+ "
+            PKG_FULL=$(echo "$LAST_LINE" | sed 's/^+ //')
+            # Extract version (everything after the last @)
+            PKG_VERSION=$(echo "$PKG_FULL" | awk -F'@' '{print $NF}')
+            # Extract name (strip the @version suffix)
+            PKG_NAME=$(echo "$PKG_FULL" | sed "s/@${PKG_VERSION}$//")
+            PKG_FILENAME="${PKG_NAME}-${PKG_VERSION}.tgz"
+            ARTIFACT_PATH="${PKG_NAME}/-/${PKG_FILENAME}"
+
+            echo "artifact_path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
+            echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
+            echo "pkg_version=$PKG_VERSION" >> $GITHUB_OUTPUT
+
       - name: Upload publish log to Artifactory
         run: |
          PROJECT_NAME=${GITHUB_REPOSITORY##*/}
-         jf rt u "npm-publish.log" "${{ secrets.NPM_STAGING_ARTIFACTORY }}/logs/publish/${PROJECT_NAME}-${{  github.event.inputs.release_version }}/" --url https://${{ secrets.JFROG_HOST_NAME }}/artifactory/ --access-token=${{ secrets.JFROG_PASSWORD }}
+         jf rt u "npm-publish.log" "${{ secrets.NPM_STAGING_ARTIFACTORY }}/logs/publish/${{ steps.published_pkg.outputs.pkg_name }}-${{ steps.published_pkg.outputs.pkg_version }}/" --url https://${{ secrets.JFROG_HOST_NAME }}/artifactory/ --access-token=${{ secrets.JFROG_PASSWORD }}
 
       - name: Upload signature file to Artifactory
         run: |
          PROJECT_NAME=${GITHUB_REPOSITORY##*/}
-         jf rt u "${PACKAGE_FILENAME}.asc" "${{ secrets.NPM_STAGING_ARTIFACTORY }}/${PROJECT_NAME}/-/" --url https://${{ secrets.JFROG_HOST_NAME }}/artifactory/ --access-token=${{ secrets.JFROG_PASSWORD }}
+         jf rt u "${PACKAGE_FILENAME}.asc" "${{ secrets.NPM_STAGING_ARTIFACTORY }}/${{ steps.published_pkg.outputs.artifact_path }}.asc" --url https://${{ secrets.JFROG_HOST_NAME }}/artifactory/ --access-token=${{ secrets.JFROG_PASSWORD }}
 
       - name: Set CVE property in Artifactory
         # Property is set on the signature file to prevent multiple calls
