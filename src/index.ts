@@ -26,7 +26,7 @@ const server = new Server(
   {
     name: "codebase-context-dumper",
     version: "0.1.2", // Incremented version
-    displayName: "Codebase Context Dumper",
+    title: "Codebase Context Dumper",
     description: "An MCP server that provides a tool to recursively read and concatenate text files from a codebase directory, respecting .gitignore rules, skipping binary files, and supporting chunked output.",
   },
   {
