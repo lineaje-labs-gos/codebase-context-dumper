@@ -152,5 +152,5 @@ jobs:
           PROJECT_NAME=${GITHUB_REPOSITORY##*/}
           # Avoid setting additional vcs properties so that only one callback is executed
           export JFROG_CLI_CI_VCS_PROPS_DISABLED=true
-          jf rt sp "${{ secrets.NPM_STAGING_ARTIFACTORY }}/${PROJECT_NAME}/-/${PACKAGE_FILENAME}.asc" "fixed_cves=${{ github.event.inputs.fixed_cves }}" --url https://${{ secrets.JFROG_HOST_NAME }}/artifactory/ --access-token ${{ secrets.JFROG_PASSWORD }}
+          jf rt sp "${{ secrets.NPM_STAGING_ARTIFACTORY }}/${{ steps.published_pkg.outputs.artifact_path }}.asc" "fixed_cves=${{ github.event.inputs.fixed_cves }}" --url https://${{ secrets.JFROG_HOST_NAME }}/artifactory/ --access-token ${{ secrets.JFROG_PASSWORD }}
 
