@@ -28,14 +28,17 @@
     "release": "standard-version"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.8.0",
+    "@modelcontextprotocol/sdk": "1.26.0",
     "ignore": "^7.0.3",
-    "isbinaryfile": "^5.0.4",
-    "qs": "6.14.2"
+    "isbinaryfile": "^5.0.4"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "standard-version": "^9.5.0",
     "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "body-parser": "2.2.1",
+    "qs": "6.14.2"
   }
 }
